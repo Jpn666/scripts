@@ -27,7 +27,7 @@ def definemarkers():
 
     DQT  = 0xffdb
     DHT  = 0xffc4
-    
+
     SOF0 = 0xffc0
     SOF1 = 0xffc1
     SOF2 = 0xffc2
@@ -42,10 +42,10 @@ def definemarkers():
     SOFD = 0xffcd
     SOFE = 0xffce
     SOFF = 0xffcf
-    
-    DRI  = 0xffdd 
+
+    DRI  = 0xffdd
     SOS  = 0xffda
-    
+
     RST0 = 0xffd0
     RST1 = 0xffd1
     RST2 = 0xffd2
@@ -54,21 +54,21 @@ def definemarkers():
     RST5 = 0xffd5
     RST6 = 0xffd6
     RST7 = 0xffd7
-    
+
     DNL  = 0xffdc
-    
+
     globals().update(locals())
-    
+
     # map value to string
     r = {}
-    
+
     key   = 0
     value = 0
     for key, value in locals().items():
         if key != "r":
             r[value] = key
     return r
-    
+
 
 markers = definemarkers()
 
@@ -80,7 +80,7 @@ markers = definemarkers()
 
 class BitStream(object):
     """docstring for BitStream"""
-    
+
     def __init__(self, handler):
         super(BitStream, self).__init__()
 
@@ -88,7 +88,7 @@ class BitStream(object):
         self.bc = 0  # bit buffer remaining bits
         self.bb = 0  # bit buffer
         self.overread = False
-    
+
     def getbits(self, n):
         while self.bc < n:
             m = ord(self.handler.read(1))
@@ -119,40 +119,40 @@ class HuffmanTree(object):
 
     def __init__(self, lengths, symbols):
         # condensed huffman table
-        self.mincode = [0] * 16  # 
-        self.maxcode = [0] * 16  # 
+        self.mincode = [0] * 16  #
+        self.maxcode = [0] * 16  #
         self.soffset = [0] * 16  # symbol offset
-        
+
         self.symbols = symbols
-        
+
         # input
         self.bitstream = None
-        
+
         c = 0
         m = 0
         for i in range(0, 16):
             self.mincode[i] = c
             self.maxcode[i] = c + lengths[i]
             self.soffset[i] = m
-            
+
             c = self.maxcode[i] << 1
-            
+
             # pre shift to left
             self.maxcode[i] = self.maxcode[i] << (15 - i)
             m += lengths[i]
-    
+
     def setinput(self, bitstream):
         self.bitstream = bitstream
-    
+
     def decode(self):
         code = self.bitstream.getbits(16)
-        
+
         j = 16
         for i in range(16):
             if code < self.maxcode[i]:
                 j = i
                 break
-        
+
         if j < 16:
             index = self.soffset[j] + ((code >> (15 - j)) - self.mincode[j])
             try:
@@ -161,7 +161,7 @@ class HuffmanTree(object):
                 raise Exception("invalid code")
             self.bitstream.dropbits(j + 1)
             return symbol
-            
+
         raise Exception("invalid code")
 
 
@@ -169,7 +169,7 @@ def read16(handler, avance=True):
     r = handler.read(2)
     if len(r) != 2:
         raise Exception(f"not a marker (read <> 2) {r}")
-    
+
     if not avance:
         handler.seek(handler.tell() - 2)
     return r[0] << 8 | r[1]
@@ -183,31 +183,31 @@ def read16(handler, avance=True):
 class JPGComponent(object):
     """
     """
-    
+
     def __init__(self):
         # quantization table
-        self.qtable    = None 
+        self.qtable    = None
         self.id        = -1  # component id
 
         # huffman code tables
         self.dchuffman = None
         self.achuffman = None
-        
+
         # coefficient
         self.coff = 0
-        
+
         self.xsampling = 0
         self.ysampling = 0
         self.ys = 0
         self.xs = 0
-        
+
         # size (in blocks) without padding
         self.nrows = 0
         self.ncols = 0
-        
+
         self.bmap = []  # block map
         self.smap = []  # sample map
-        
+
         # raw code units (complete scan is image is non-interleaved)
         self.scan   = None
 
@@ -218,65 +218,65 @@ class JPGComponent(object):
 class JPG(object):
     """
     """
-    
+
     def __init__(self, handler):
         self.majorversion  = 0
         self.minorversion  = 0
-        
+
         self.bitspersample = 0
         self.numcomponents = 0
-        
+
         # image size
         self.sizey = 0
         self.sizex = 0
         self.image = []
-        
+
         self.decoded = False
-        
+
         # input stream
         self.handler = handler
-        
+
         # restart interval in MCU units
-        self.rinterval = 0    
-        
+        self.rinterval = 0
+
         # components in scan
         self.sccount = 0
-        
+
         # bit reader
         self.bitstream = None
-        
+
         # quatization tables
         self.QT = [None] * 4
-        
+
         # 0: DC 1: AC
         self.HT = []
         for i in range(2):
             self.HT.append([None] * 4)
-        
+
         self.isprogressive = False
         self.isinterleaved = True
-        
+
         self.ysampling = 0
         self.xsampling = 0
         self.nrows = 0
         self.ncols = 0
-        
+
         # sucessive aproximation
         self.al = 0
         self.ah = 0
-        
+
         # spectral selection start and end
         self.ss = 0
         self.se = 0
-        
+
         # pass
         self.npass = 0
-        
+
         # JFIF uses either 1 component (Y, greyscaled) or 3 components
         self.components = []
         for i in range(4):
             self.components.append(JPGComponent())
-        
+
         # component order in the scan
         self.corder = [0, 1, 2]
         self.isrgb  = False
@@ -284,7 +284,7 @@ class JPG(object):
         # component in the scan
         self.scancomponent = 0
         self.eobrun = 0
-        
+
         self.iccp = None
         self.iccpsize = 0
 
@@ -295,7 +295,7 @@ def parseAPP0(handler, jpg):
     position = handler.tell()
     r = read16(handler)
     s = handler.read(5)
-    
+
     signature = s[:4]
     if signature != b"JFIF" and signature != b"JFXX":
         if signature == b"Ocad":
@@ -303,17 +303,17 @@ def parseAPP0(handler, jpg):
             handler.read(r - remaining)
             return
         raise Exception(f"bad signature {s[:4]}")
-    
+
     jpg.majorversion = ord(handler.read(1))
     jpg.minorversion = ord(handler.read(1))
     if jpg.majorversion != 1:
         print("version may not be supported")
-    
+
     # density units
     handler.read(1)
     handler.read(2)  # x density
     handler.read(2)  # y density
-    
+
     remaining = handler.tell() - position
     handler.read(r - remaining)
 
@@ -321,7 +321,7 @@ def parseAPP0(handler, jpg):
 def parseDQT(handler, jpg):
     position = handler.tell()
     r = read16(handler)
-    
+
     def readtable():
         s = ord(handler.read(1))
         tableid   = (s >> 0) & 0x0f
@@ -330,22 +330,22 @@ def parseDQT(handler, jpg):
             precision = 2  # 16 bit
         else:
             precision = 1  # 8 bit
-        
+
         if tableid > 3:
             raise Exception("quantization table id > 3")
-        
+
         table = []
         for i in range(64):
             if precision == 1:
                 table.append(ord(handler.read(1)))
                 continue
-            
+
             # 16 bits
             a = ord(handler.read(1))
             b = ord(handler.read(1))
             table.append((a << 8) | b)
         jpg.QT[tableid] = table
-    
+
     remaining = 1
     while remaining:
         readtable()
@@ -355,10 +355,10 @@ def parseDQT(handler, jpg):
 def getblockmap(isampling, csampling):
     ys = isampling[0] // csampling[0]
     xs = isampling[1] // csampling[1]
-    
+
     iy = 64 // ys
     ix = 8  // xs
-    
+
     i = 0
     n = 0
     r = [0] * (isampling[0] * isampling[1])
@@ -369,14 +369,14 @@ def getblockmap(isampling, csampling):
             a[i] = (n + ((x * ix) & 0x07)) & 0x3f
             i += 1
         n += iy
-    
+
     def getmap():
         bx = [0, 0, 1, 0, 2]
         by = [0, 0, 3, 0, 6]
         y = isampling[0] // csampling[0]
         x = isampling[1] // csampling[1]
         return offsetmap[by[y] + bx[x]]
-    
+
     # block index, map offset
     return [r, a, getmap()]
 
@@ -393,12 +393,12 @@ def findcomponent(jpg, n):
 def parseSOF0(handler, jpg):
     position = handler.tell()
     r = read16(handler)
-    
+
     s = ord(handler.read(1))
     if s != 8 and s != 12 and s != 16:
        raise Exception("bad sample values")
     jpg.bitspersample = s
-    
+
     # limit the sample to 8 cuz we can UwU
     if s != 8:
         raise Exception(f"bit sample {s} not supported")
@@ -408,20 +408,20 @@ def parseSOF0(handler, jpg):
     sizex = read16(handler)
     if sizex == 0 or sizey == 0:
        raise Exception("image size values are wrong")
-    
+
     jpg.sizey = sizey
     jpg.sizex = sizex
     print(f"image size y:{sizey} x:{sizex}")
-    
+
     # jfif only has support for 1 or 3 components
     s = ord(handler.read(1))
     if s != 1 and s != 3:
         raise Exception(f"number of components <> 1 and <> 3 {s}")
     jpg.numcomponents = s
-    
+
     ysampling = 0
     xsampling = 0
-    
+
     # note: yuv may starts at component id 0, RGB DCT images uses
     # components ids: chr(82) + chr(71) + chr(66) (RGB)
     for i in range(jpg.numcomponents):
@@ -437,19 +437,19 @@ def parseSOF0(handler, jpg):
         ys = (j >> 0) & 0x0f
         xs = (j >> 4) & 0x0f
         print(f"sampling {c} {ys} {xs}")
-        
+
         if ys != 1 and ys != 2 and ys != 4:
             raise Exception("invalid sampling (not supported)")
         if xs != 1 and xs != 2 and xs != 4:
             raise Exception("invalid sampling (not supported)")
-        
+
         component.ysampling = ys
         component.xsampling = xs
         if ys > ysampling:
             ysampling = ys
         if xs > xsampling:
             xsampling = xs
-        
+
         # quantization table (it must be defined)
         j = ord(handler.read(1))
         if j > 3:
@@ -457,7 +457,7 @@ def parseSOF0(handler, jpg):
         if jpg.QT[j] == None:
             raise Exception(f"quantization table {j} not defined")
         component.qtable = jpg.QT[j]
-    
+
     if jpg.numcomponents == 3:
         j = 0
         for c in ["R", "G", "B"]:
@@ -469,33 +469,33 @@ def parseSOF0(handler, jpg):
     # calculate the MCU dimensions and block count
     nrows = (jpg.sizey + ((ysampling * 8) - 1)) // (ysampling * 8)
     ncols = (jpg.sizex + ((xsampling * 8) - 1)) // (xsampling * 8)
-    
+
     jpg.ysampling = ysampling
     jpg.xsampling = xsampling
     jpg.nrows = nrows
     jpg.ncols = ncols
-    
+
     for i in range(jpg.numcomponents):
         c = jpg.components[i]
-        
+
         c.ys = ysampling // c.ysampling
         c.xs = xsampling // c.xsampling
         sy = c.ys * 8
         sx = c.xs * 8
         c.nrows = (jpg.sizey + sy - 1) // sy
         c.ncols = (jpg.sizex + sx - 1) // sx
-        
+
         a = getblockmap((ysampling, xsampling), (c.ysampling, c.xsampling))
         c.bindex = a[0]  # block index
         c.offset = a[1]  # entry offset
         c.bmap   = a[2]  # offset map
-        
+
         for i in range(c.ysampling * c.xsampling):
             c.blocks.append([0] * 64)
-        
+
     remaining = handler.tell() - position
     handler.read(r - remaining)
-    
+
     # result (image)
     r = []
     for i in range(jpg.sizey * jpg.sizex):
@@ -509,34 +509,34 @@ def parseSOF0(handler, jpg):
 def parseDHT(handler, jpg):
     position = handler.tell()
     r = read16(handler)
-    
+
     def readtable():
         s = ord(handler.read(1))
         tid   = (s >> 0) & 0x0f
         ttype = (s >> 4) & 0x01  # 0: DC table, 1: AC table
-        
+
         if (ttype != 0 and ttype != 1) or tid > 3:
             raise Exception(f"wrong huffman table type({ttype}) or id({tid})")
-        
+
         print(f"table {tid} type:",  ["DC", "AC"][ttype])
-        
+
         lengths = []
         symbols = []
-        
+
         total = 0
         for i in range(16):
             c = ord(handler.read(1))
             total += c
             lengths.append(c)
-        
+
         for i in range(total):
             symbols.append(ord(handler.read(1)))
         print("lengths:", lengths)
         print("symbols:", symbols)
-        
+
         ht = HuffmanTree(lengths, symbols)
         jpg.HT[ttype][tid] = ht
-    
+
     remaining = 1
     while remaining:
         readtable()
@@ -547,16 +547,16 @@ def initblocks(jpg):
     # stuffed size
     mcusy = jpg.nrows * (jpg.ysampling << 3)
     mcusx = jpg.ncols * (jpg.xsampling << 3)
-    
+
     blocks = []
     for i in range(jpg.numcomponents):
         c = jpg.components[i]
-        
+
         nrows = mcusy // ((jpg.ysampling // c.ysampling) * 8)
         ncols = mcusx // ((jpg.xsampling // c.xsampling) * 8)
         c.irows = nrows
         c.icols = ncols
-        
+
         r = []
         for y in range(nrows * ncols):
             r.append([0] * 64)
@@ -566,19 +566,19 @@ def initblocks(jpg):
 def parseSOS(handler, jpg):
     position = handler.tell()
     r = read16(handler)
-    
+
     s = ord(handler.read(1))
     if s != 1 and s != 3:
         raise Exception("bad number of components")
-     
+
     component = None
-    
+
     print(f"SOS: number of components {s}")
     corder = []
     for i in range(s):
         c = ord(handler.read(1))  # component ID
         j = ord(handler.read(1))
-        
+
         n = findcomponent(jpg, c)
         if n == None:
             raise Exception("invalid component id")
@@ -589,14 +589,14 @@ def parseSOS(handler, jpg):
 
         jpg.scancomponent = n
         print(f"component {n}")
-        
+
         ac = (j >> 0) & 0xf
         dc = (j >> 4) & 0xf
         if ac > 3 or dc > 3:
             raise Exception("bad huffman table index (not supported)")
         print(f"DC table {dc}")
         print(f"AC table {ac}")
-        
+
         component = jpg.components[n]
         component.dchuffman = jpg.HT[0][dc]
         component.achuffman = jpg.HT[1][ac]
@@ -609,11 +609,11 @@ def parseSOS(handler, jpg):
     if jpg.isprogressive:
         ss = ord(handler.read(1))
         se = ord(handler.read(1))
-        
+
         j = ord(handler.read(1))
         ah = (j >> 4) & 0xf
         al = (j >> 0) & 0xf
-        
+
         v = True
         if ss == 0 or se == 0:
             if se or ss:
@@ -624,20 +624,20 @@ def parseSOS(handler, jpg):
             else:
                 if se > 63:
                     v = False
-        
+
         if v == False:
             raise Exception("bad spectral selection")
-            
+
         if ah > 13 or al > 13:
             raise Exception("bad succesive aproximation")
-        
+
         print(f"spectral start {ss}, end: {se}")
         print(f"sucessive aproximation high {ah}")
         print(f"sucessive aproximation  low {al}")
-        
+
         jpg.ss = ss
         jpg.se = se
-        
+
         jpg.ah = ah
         jpg.al = al
         if ss == 0:
@@ -650,28 +650,29 @@ def parseSOS(handler, jpg):
             else:
                 if component.dchuffman == None:
                     isvalid = False
-            
+
             if isvalid == False:
                 raise Exception("required DC huffman table not defined")
-                
+
         else:
             if component.achuffman == None:
                 raise Exception("required AC huffman table not defined")
     else:
         # skip 3 bytes
         handler.read(3)
-    
+
     remaining = r - (handler.tell() - position)
     if remaining:
         raise Exception("invalid data")
-    
+
     if jpg.npass == 0:
         jpg.isinterleaved = True
         if s != jpg.numcomponents:
             jpg.isinterleaved = False
         if jpg.isprogressive or jpg.isinterleaved == False:
-            initblocks(jpg)
-        
+            pass
+        initblocks(jpg)
+
     if jpg.isprogressive == False:
         if jpg.isinterleaved == False:
             decode(handler, jpg, component)
@@ -700,7 +701,7 @@ mm = inittable()
 def IDCTblock(block, r, nmm=None):
     if nmm == None:
         nmm = mm
-    
+
     for y in range(8):
         r[(y * 8) + 0] = round(IDCT(block, y, 0, nmm))
         r[(y * 8) + 1] = round(IDCT(block, y, 1, nmm))
@@ -719,7 +720,7 @@ def IDCT(block, y, x, nmm):
     mmy = nmm[y]
     for u in range(8):
         a = mmx[u]
-        
+
         r += block[(u * 8) + 0] * mmy[0] * a
         r += block[(u * 8) + 1] * mmy[1] * a
         r += block[(u * 8) + 2] * mmy[2] * a
@@ -746,47 +747,47 @@ zmatrix = [
 def decodeblock(jpg, component, block, update=True):
     dchuff = component.dchuffman
     achuff = component.achuffman
-    
+
     for i in range(64):
         block[i] = 0
-    
+
     # expand
     def decode(symbol, v):
         n = 2 ** (symbol - 1)
         if v >= n:
             return v
         return v - ((n * 2) - 1)  # v - ((n << 1) - 1)
-    
+
     s = dchuff.decode()
     component.coff += decode(s, jpg.bitstream.fetch(s))
     block[0] = component.coff
-    
+
     i = 1
     while i < 64:
         s = achuff.decode()
         if s == 0:
             break
-        
+
         if s > 15:
             i += s >> 4
             s = s & 0x0f
-        
+
         v = jpg.bitstream.fetch(s)
         if i < 64:
             c = decode(s, v)
             block[i] = c
             i += 1
-    
+
     # decode
     if update == False:
         return
     for i in range(64):
         block[i] = block[i] * component.qtable[i]
-        
+
     t0 = [0] * 64
     for i in range(64):
         t0[i] = block[zmatrix[i]]
-    
+
     # reverse DCT and copy
     IDCTblock(t0, block)
 
@@ -802,7 +803,7 @@ def setdecoder(handler, jpg):
             ac.bitstream = bitstream
         if dc:
             dc.bitstream = bitstream
-    
+
     jpg.bitstream = bitstream
 
 
@@ -811,7 +812,7 @@ def transformcolor(r1, r2, r3, isrgb):
         r = (r3 * 1.4020000000000001) + r1
         b = (r2 * 1.772             ) + r1
         g = (r1 - (0.114 * b) - (0.299 * r)) * 1.7035775127768313
-        
+
         r1 = r
         r2 = g
         r3 = b
@@ -915,71 +916,79 @@ offsetmap = [
 ]
 
 
-def setpixels(jpg, y, x):
+def setpixels3(jpg, y, x):
     origin = []
     for yo in range(jpg.ysampling):
         for xo in range(jpg.xsampling):
             origin.append([yo * 8, xo * 8])
-    
+
     mcussizey = jpg.ysampling * 8
     mcussizex = jpg.xsampling * 8
     i = 0
-    
+
     c1 = jpg.components[0]
     c2 = jpg.components[1]
     c3 = jpg.components[2]
-    
+
     # LUT up-sample
     for v in origin:
         d1 = c1.offset[i]
         i1 = c1.bindex[i]
-        if jpg.numcomponents == 3:
-            d2 = c2.offset[i]
-            d3 = c3.offset[i]
-            i2 = c2.bindex[i]
-            i3 = c3.bindex[i]
-        
+        d2 = c2.offset[i]
+        d3 = c3.offset[i]
+        i2 = c2.bindex[i]
+        i3 = c3.bindex[i]
+
         row = y * mcussizey + v[0]
         for stepy in range(8):
             if row >= jpg.sizey:
                 break
-            
+
             col = x * mcussizex + v[1]
             for stepx in range(8):
                 if col >= jpg.sizex:
                     break
                 offset = (row * jpg.sizex) + col
-                        
+
                 s = stepx + (stepy * 8)
-                if jpg.numcomponents == 1:
-                    pixel = transformcolor(
-                        c1.blocks[i1][c1.bmap[s] + d1], 1.0, 1.0, True)
-                    jpg.image[offset] = pixel[0]
-                else:
-                    try:
-                        pixel = transformcolor(
-                            c1.blocks[i1][c1.bmap[s] + d1],
-                            c2.blocks[i2][c2.bmap[s] + d2],
-                            c3.blocks[i3][c3.bmap[s] + d3],
-                            jpg.isrgb)
-                    except:
-                        raise
-                    jpg.image[offset] = pixel
+                pixel = transformcolor(
+                    c1.blocks[i1][c1.bmap[s] + d1],
+                    c2.blocks[i2][c2.bmap[s] + d2],
+                    c3.blocks[i3][c3.bmap[s] + d3], jpg.isrgb)
+                jpg.image[offset] = pixel
                 col += 1
             row += 1
         i += 1
+
+
+def setpixels1(jpg, y, x, block):
+    row = y * 8
+    for stepy in range(8):
+        if row >= jpg.sizey:
+            break
+
+        col = x * 8
+        for stepx in range(8):
+            if col >= jpg.sizex:
+                break
+            offset = (row * jpg.sizex) + col
+
+            pixel = transformcolor(block[stepx + (stepy * 8)], 1.0, 1.0, True)
+            jpg.image[offset] = pixel[0]
+            col += 1
+        row += 1
 
 
 def checkrinterval(handler, jpg):
     m = ord(handler.read(1))
     if m != 0xff:
         raise Exception("invalid restart interval value")
-    
+
     while True:
         m = ord(handler.read(1))
         if m != 0xff:
             break
-    
+
     # reset the cofficients and the bitstream
     for i in range(jpg.numcomponents):
         c = jpg.components[i]
@@ -990,7 +999,8 @@ def checkrinterval(handler, jpg):
 
 def decode(handler, jpg, component=None):
     setdecoder(handler, jpg)
-    
+
+    # non interleaved component
     if component:
         rinterval = jpg.rinterval
         for y in range(component.nrows):
@@ -1000,7 +1010,7 @@ def decode(handler, jpg, component=None):
                         checkrinterval(handler, jpg)
                         rinterval = jpg.rinterval
                     rinterval -= 1
-                
+
                 n = (y * component.icols) + x
                 decodeblock(jpg, component, component.scan[n], False)
         return
@@ -1011,8 +1021,18 @@ def decode(handler, jpg, component=None):
             for xs in range(component.xsampling):
                 decodeblock(jpg, component, component.blocks[n])
                 n += 1
-    
     rinterval = jpg.rinterval
+
+    if jpg.numcomponents == 1:
+        c = jpg.components[0]
+        for y in range(c.nrows):
+            for x in range(c.ncols):
+                decodeblock(jpg, c, c.blocks[0])
+                setpixels1(jpg, y, x, c.blocks[0])
+
+        jpg.decoded = True
+        return
+
     for y in range(jpg.nrows):
         for x in range(jpg.ncols):
             if jpg.rinterval:
@@ -1020,12 +1040,12 @@ def decode(handler, jpg, component=None):
                     checkrinterval(handler, jpg)
                     rinterval = jpg.rinterval
                 rinterval -= 1
-            
+
             for i in jpg.corder:
                 docomponent(jpg.components[i])
-            
-            setpixels(jpg, y, x)
-    
+
+            setpixels3(jpg, y, x)
+
     jpg.decoded = True
     print("decoding done")
 
@@ -1037,13 +1057,13 @@ def decode(handler, jpg, component=None):
 
 def decodefirstDC(jpg, component, block):
     dchuff = component.dchuffman
-    
+
     def decode(symbol, v):
         n = 2 ** (symbol - 1)
         if v >= n:
             return v
         return v - ((n * 2) - 1)
-    
+
     s = dchuff.decode()
     component.coff += decode(s, jpg.bitstream.fetch(s))
     block[0] = int(component.coff) << jpg.al
@@ -1051,7 +1071,7 @@ def decodefirstDC(jpg, component, block):
 
 def readfirstDC(jpg):
     rinterval = jpg.rinterval
-    
+
     def docomponent(c, y, x):
         y1 = y * c.ysampling
         x1 = x * c.xsampling
@@ -1064,12 +1084,12 @@ def readfirstDC(jpg):
     singlecomponent = (jpg.numcomponents == 1) or (jpg.isinterleaved == False)
     totaly = jpg.nrows
     totalx = jpg.ncols
-    
+
     c = jpg.components[jpg.scancomponent]
     if singlecomponent:
         totaly = c.nrows
         totalx = c.ncols
-    
+
     for y in range(totaly):
         for x in range(totalx):
             if jpg.rinterval:
@@ -1077,15 +1097,15 @@ def readfirstDC(jpg):
                     checkrinterval(jpg.handler, jpg)
                     rinterval = jpg.rinterval
                 rinterval -= 1
-            
+
             if singlecomponent == False:
                 for i in jpg.corder:
                     docomponent(jpg.components[i], y, x)
                 continue
-            
+
             n = (y * c.icols) + x
             decodefirstDC(jpg, c, c.scan[n])
-    
+
     #for i in range(jpg.numcomponents):
     #    c = jpg.components[i + 1]
     #    print(f"component {i}")
@@ -1098,11 +1118,11 @@ def readfirstDC(jpg):
 
 def refineDC(jpg):
     rinterval = jpg.rinterval
-    
+
     def refine(block):
         s = jpg.bitstream.fetch(1)
         block[0] = block[0] | (s << jpg.al)
-    
+
     def docomponent(c, y, x):
         y1 = y * c.ysampling
         x1 = x * c.xsampling
@@ -1111,16 +1131,16 @@ def refineDC(jpg):
             for x2 in range(c.xsampling):
                 n = (offsety * c.icols) + x1 + x2
                 refine(c.scan[n])
-    
+
     singlecomponent = (jpg.numcomponents == 1) or (jpg.isinterleaved == False)
     totaly = jpg.nrows
     totalx = jpg.ncols
-    
+
     c = jpg.components[jpg.scancomponent]
     if singlecomponent:
         totaly = c.nrows
         totalx = c.ncols
-    
+
     for y in range(totaly):
         for x in range(totalx):
             if jpg.rinterval:
@@ -1128,7 +1148,7 @@ def refineDC(jpg):
                     checkrinterval(jpg.handler, jpg)
                     rinterval = jpg.rinterval
                 rinterval -= 1
-            
+
             if singlecomponent == False:
                 for i in jpg.corder:
                     docomponent(jpg.components[i], y, x)
@@ -1141,17 +1161,17 @@ def decodefirstAC(jpg, component, block):
     if jpg.eobrun > 0:
         jpg.eobrun -= 1
         return
-    
+
     def decode(symbol, v):
         n = 2 ** (symbol - 1)
         if v >= n:
             return v
         return v - ((2 * n) - 1)
-    
+
     i = jpg.ss
     while i <= jpg.se:
         s = achuff.decode()
-        
+
         a = (s >> 0) & 0xf
         b = (s >> 4)
         if a == 0:
@@ -1167,10 +1187,10 @@ def decodefirstAC(jpg, component, block):
             i += b
             if i >= 64:
                 raise Exception("error: data out of range")
-            
+
             v = jpg.bitstream.fetch(a)
             c = decode(a, v)
-            
+
             block[i] = int(c) << jpg.al
             i += 1
     jpg.eobrun = 0
@@ -1178,10 +1198,10 @@ def decodefirstAC(jpg, component, block):
 
 def readfirstAC(jpg):
     rinterval = jpg.rinterval
-    
+
     # current pass component
     c = jpg.components[jpg.scancomponent]
-    
+
     jpg.eobrun = 0
     for y in range(c.nrows):
         for x in range(c.ncols):
@@ -1190,14 +1210,14 @@ def readfirstAC(jpg):
                     checkrinterval(jpg.handler, jpg)
                     rinterval = jpg.rinterval
                 rinterval -= 1
-            
+
             n = (y * c.icols) + x
             decodefirstAC(jpg, c, c.scan[n])
 
 
 def decoderefineAC(jpg, component, block):
     achuff = component.achuffman
-    
+
     def refinecofficient(aproximation, value):
         nextbit = jpg.bitstream.fetch(1)
         if value > 0:
@@ -1209,15 +1229,15 @@ def decoderefineAC(jpg, component, block):
                 value += -1 << aproximation
             return value
         return value
-    
+
     def decode(symbol, v):
         n = 2 ** (symbol - 1)
         if v >= n:
             return v
         return v - ((2 * n) - 1)
-    
+
     i = jpg.ss
-    
+
     if jpg.eobrun != 0:
         while i <= jpg.se:
             if block[i] != 0:
@@ -1225,10 +1245,10 @@ def decoderefineAC(jpg, component, block):
             i += 1
         jpg.eobrun -= 1
         return
-    
+
     while i <= jpg.se:
         s = achuff.decode()
-        
+
         a = (s >> 0) & 0xf  # size
         b = (s >> 4)        # run-length
 
@@ -1240,7 +1260,7 @@ def decoderefineAC(jpg, component, block):
                 else:
                     b -= 1
                 i += 1
-            
+
             block[i] = newvalue
             i += 1
         else:
@@ -1267,10 +1287,10 @@ def decoderefineAC(jpg, component, block):
 
 def refineAC(jpg):
     rinterval = jpg.rinterval
-    
+
     # current pass component
     c = jpg.components[jpg.scancomponent]
-    
+
     jpg.eobrun = 0
     for y in range(c.nrows):
         for x in range(c.ncols):
@@ -1279,18 +1299,18 @@ def refineAC(jpg):
                     checkrinterval(jpg.handler, jpg)
                     rinterval = jpg.rinterval
                 rinterval -= 1
-            
+
             n = (y * c.icols) + x
             decoderefineAC(jpg, c, c.scan[n])
 
 
 def decodepass(handler, jpg):
     setdecoder(handler, jpg)
-    
+
     if jpg.ss == 0:
         if jpg.se != 0:
             raise Exception("error, AC and DC data")
-        
+
         if jpg.ah == 0:
             print("[pass]: first DC")
             readfirstDC(jpg)
@@ -1300,7 +1320,7 @@ def decodepass(handler, jpg):
     else:
         if jpg.sccount != 1:
             raise Exception("more than 1 component in a progressive scan")
-        
+
         if jpg.ah == 0:
             print("[pass]: read first AC")
             readfirstAC(jpg)
@@ -1318,28 +1338,41 @@ def updateimage(jpg):
             offsety = y1 + y2
             for x2 in range(c.xsampling):
                 n = (offsety * c.icols) + x1 + x2
-                
+
                 block = c.scan[n]
-                
+
                 t0 = [0] * 64
                 for i in range(64):
                     t0[i] = block[zmatrix[i]] * c.qtable[zmatrix[i]]
                 IDCTblock(t0, c.blocks[j])
-                
+
                 j += 1
-    
+
+    if jpg.numcomponents == 1:
+        c = jpg.components[0]
+        for y in range(c.nrows):
+            for x in range(c.ncols):
+                block = c.scan[y * c.icols + x]
+                t0 = [0] * 64
+                for i in range(64):
+                    t0[i] = block[zmatrix[i]] * c.qtable[zmatrix[i]]
+                IDCTblock(t0, block)
+
+                setpixels1(jpg, y, x, block)
+        return
+
     for y in range(jpg.nrows):
         for x in range(jpg.ncols):
             for i in range(jpg.numcomponents):
                 docomponent(jpg.components[i], y, x)
-            
-            setpixels(jpg, y, x)
+
+            setpixels3(jpg, y, x)
 
 
 def parseAPP2(handler, jpg):
     r = read16(handler)
     r -= 2
-    
+
     # offset 0 is the profile size
     # offset 36 is the signature "acsp"
     m = handler.read(12)
@@ -1348,11 +1381,11 @@ def parseAPP2(handler, jpg):
         return
 
     s1 = ord(handler.read(1))
-    s2 = ord(handler.read(1))    
+    s2 = ord(handler.read(1))
     if jpg.iccp == None:
         jpg.iccp = b""
     jpg.iccp += handler.read(r - 12 - 2)
-    
+
     if s1 == s2:
         jpg.iccpsize = len(jpg.iccp)
 
@@ -1361,14 +1394,14 @@ def parseDRI(handler, jpg):
     r = read16(handler)
     if r != 4:
         raise Exception("DRI marker size != 4")
-    
+
     i = read16(handler)
     jpg.rinterval = i
 
 
 def parsesegments(handler):
     jpg = JPG(handler)
-    
+
     while True:
         try:
             m = read16(handler)
@@ -1380,32 +1413,32 @@ def parsesegments(handler):
         s = ""
         if m in markers:
             s = markers[m]
-        
+
         print(f"marker {m:00x} {s}")
-        
+
         if m == APP0:
             parseAPP0(handler, jpg)
             continue
-        
+
         if m in [SOF0, SOF1, SOF2]:
             if m == SOF2:
                 print("progressive image")
                 jpg.isprogressive = True
-            
+
             parseSOF0(handler, jpg)
             continue
-        
+
         if m in [SOF3, SOF5, SOF6, SOF7]:
             raise Exception("image type not supported")
-        
+
         if m == DQT:
             parseDQT(handler, jpg)
             continue
-        
+
         if m == DHT:
             parseDHT(handler, jpg)
             continue
-        
+
         if m == SOS:
             parseSOS(handler, jpg)
             #if jpg.isprogressive:
@@ -1414,7 +1447,7 @@ def parsesegments(handler):
             #    updateimage(jpg)
             #    return jpg
             continue
-        
+
         # end of image
         if m == EOI:
             if jpg.isprogressive:
@@ -1423,28 +1456,28 @@ def parsesegments(handler):
                 if jpg.isinterleaved == False:
                     updateimage(jpg)
             return jpg
-        
+
         if m == DRI:
             parseDRI(handler, jpg)
             continue
-        
+
         # ICCP
         if m == APP2:
             parseAPP2(handler, jpg)
             continue
-        
+
         # markers for frames using arithmetic coding
         if m in [SOF9, SOFA, SOFB, SOFD, SOFE, SOFF]:
             raise Exception("image not supported")
-        
+
         # not length
         if (m >= 0xffd0 and m <= 0xffd9) or m == 0xff01:
             continue
-        
+
         r = read16(handler) - 2
         if r < 0:
             raise Exception("invalid marker length")
-        
+
         handler.read(r)
         continue
 
@@ -1455,13 +1488,13 @@ def parsefile(fpath):
     except IOError:
         print("failed to open file")
         raise
-    
+
     # check the header
     r = read16(handler)
     if r == 0xffd8:
         image = parsesegments(handler)
         return image
-        
+
     raise Exception("invalid image file (not a JPG?)")
 
 
@@ -1472,12 +1505,12 @@ def parsefile(fpath):
 
 if __name__ == "__main__":
     from PIL import Image
-    
+
     image = parsefile(sys.argv[1])
-    
+
     mode = "RGB"
     if image.numcomponents == 1:
-        mode = "L"    
+        mode = "L"
     a = Image.new(mode, (image.sizex, image.sizey))
-    a.putdata(image.image) 
+    a.putdata(image.image)
     a.show()
