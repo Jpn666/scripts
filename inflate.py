@@ -19,7 +19,7 @@ class BitReader(bytearray):
     def getbits(self, length):
         if length == 0:
             return 0
-        
+
         buffer = self.buffer
         while length > self.bc:
             self.buffer += self.pop(0) << self.bc
@@ -71,7 +71,7 @@ def reversecode(code, length):
         return r >> (0x08 - length)
     a = (code >> 0) & 0xff
     b = (code >> 8) & 0xff
-    
+
     a = rtable[a >> 4] | (rtable[a & 0x0f] << 4)
     b = rtable[b >> 4] | (rtable[b & 0x0f] << 4)
     r = b | (a << 8)
@@ -154,20 +154,20 @@ def buildtable(lengths, mainbits):
         lencount[s] += 1
 
     if lencount[0] == len(lengths):
-        raise Exception("Invalid lengths")
+        raise Exception("invalid lengths")
 
     lencount[0] = 0
     maxlen = len(lencount) - 1
-    
+
     j = 1
     for i in range(1, len(lencount)):
         j = (j << 1) - lencount[i]
         if j < 0:
             raise Exception("overlength code")
-    
+
     if j > 0:
         raise Exception("incomplete code")
-    
+
     # determine the first code of each length
     code     = 0
     nextcode = [0] * (maxlen + 1)
@@ -176,7 +176,7 @@ def buildtable(lengths, mainbits):
         nextcode[i] = reversecode(code, i)
 
     table = [0] * (1 << mainbits)
-    
+
     if maxlen > mainbits:
         # mark the entries as secondary tables
         remmask = (1 << (maxlen - mainbits)) - 1
@@ -189,7 +189,7 @@ def buildtable(lengths, mainbits):
                 entries = count >> r
                 if count & remmask:
                     entries += 1
-                
+
                 index = code
                 for j in range(entries):
                     if not table[index]:
@@ -201,20 +201,20 @@ def buildtable(lengths, mainbits):
 
             r -= 1
             remmask = remmask >> 1
-    
+
     # build the table
     for j in range(len(lengths)):
         length = lengths[j]
         if length == 0:
             continue
-        
+
         entry = TableEntry()
         entry.length = length
         entry.symbol = j
-        
+
         code = nextcode[length]
         nextcode[length] = reverseinc(code, length)
-        
+
         e = table[code & ((1 << mainbits) - 1)]
         if length > mainbits:
             if not isinstance(e, TableEntry):
@@ -222,7 +222,7 @@ def buildtable(lengths, mainbits):
 
             code = code >> mainbits
             r = e.length - (length - mainbits)
-            
+
             length = length - mainbits
             m = e.subtable
         else:
@@ -246,7 +246,7 @@ def decode(table, bb, mainbits):
     if e.subtable:
         bb.dropbits(mainbits)
         need = e.length
-        
+
         c = bb.getbits(need)
         e = e.subtable[c]
         bb.dropbits(e.length - mainbits)
@@ -345,28 +345,28 @@ def decodeblock(lcodes, dcodes, bb, ostrm):
     ]
     while 1:
         symbol = decode(lcodes, bb, LCODES_ROOTBITS)
-        
+
         if symbol < 256:
             ostrm.append(symbol)
             #print(symbol)
 
             continue
-        
+
         if symbol == 256:
             break
-        
+
         # decode distance
         symbol = symbol - 257
-        
+
         n = lengthsextra[symbol]
         length = lengths[symbol] + bb.getbits(n)
         bb.dropbits(n)
-        
+
         # get distance
         symbol = decode(dcodes, bb, DCODES_ROOTBITS)
         if symbol < 0:
             raise Exception()
-        
+
         try:
             n = distanceextra[symbol]
         except IndexError:
@@ -375,7 +375,7 @@ def decodeblock(lcodes, dcodes, bb, ostrm):
             exit()
         distance = distances[symbol] + bb.getbits(n)
         bb.dropbits(n)
-        
+
         #print(f"{length} -> {distance}")
         ostrm.copyblock(distance, length)
 
@@ -396,7 +396,7 @@ def decodeblock(lcodes, dcodes, bb, ostrm):
 def stored(bb, ostrm):
     bln = bb.getbyte() | (bb.getbyte() << 8)
     nln = bb.getbyte() | (bb.getbyte() << 8)
-    
+
     if (~bln & nln) != nln:
         raise Exception("Bad length value for stored block")
     while bln:
@@ -438,15 +438,15 @@ def fixed(bb, ostrm):
     lengths += [9] * (256 - 144)
     lengths += [7] * (280 - 256)
     lengths += [8] * (288 - 280)
-    
+
     # literal - length table
     lcodes = buildtable(lengths, LCODES_ROOTBITS)
-    
+
     # distance table
     lengths = []
     lengths += [5] * 32
     dcodes = buildtable(lengths, DCODES_ROOTBITS)
-    
+
     decodeblock(lcodes, dcodes, bb, ostrm)
 
 
@@ -522,7 +522,7 @@ def dynamic(bb, ostrm):
     cdlnsorder = [
         16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15
     ]
-    
+
     hlit  = bb.getbits(5) + 257; bb.dropbits(5)
     hdist = bb.getbits(5) +   1; bb.dropbits(5)
     hclen = bb.getbits(4) +   4; bb.dropbits(4)
@@ -531,16 +531,16 @@ def dynamic(bb, ostrm):
     for i in range(hclen):
         length = bb.getbits(3)
         lengths[cdlnsorder[i]] = length
-        
+
         bb.dropbits(3)
 
     table = buildtable(lengths, 7)
     index = 0
-    
+
     lengths = [0] * (hlit + hdist)
     while index < hlit + hdist:
         symbol = decode(table, bb, 7)
-        
+
         if symbol < 16:
             lengths[index] = symbol
             index += 1
@@ -548,7 +548,7 @@ def dynamic(bb, ostrm):
         if symbol == 16:
             length = bb.getbits(2) + 3
             bb.dropbits(2)
-            
+
             s = lengths[index-1]
             for i in range(length):
                 lengths[index] = s
@@ -557,7 +557,7 @@ def dynamic(bb, ostrm):
         if symbol == 17:
             length = bb.getbits(3) + 3
             bb.dropbits(3)
-            
+
             s = 0
             for i in range(length):
                 lengths[index] = s
@@ -566,19 +566,19 @@ def dynamic(bb, ostrm):
         if symbol == 18:
             length = bb.getbits(7) + 11
             bb.dropbits(7)
-            
+
             s = 0
             for i in range(length):
                 lengths[index] = s
                 index += 1
             continue
-    
+
     if lengths[256] == 0:
         raise Exception("missing BLOCK_END symbol")
-    
+
     lcodes = buildtable(lengths[:hlit], LCODES_ROOTBITS)
     dcodes = buildtable(lengths[hlit:], DCODES_ROOTBITS)
-    
+
     decodeblock(lcodes, dcodes, bb, ostrm)
 
 
@@ -614,16 +614,16 @@ def inflate(data):
     bb     = BitReader(data)
     ostrm  = ByteBuffer() 
     bfinal = 0
-    
+
     while not bfinal:
         bfinal = bb.getbits(1)
         bb.dropbits(1)
         btype  = bb.getbits(2)
         bb.dropbits(2)
-        
+
         #print(f"last block {bfinal}")
         #print(f"block type {btype} offset {len(ostrm)}")
-        
+
         blockcount += 1
         if btype == 0:  # stored block
             stored(bb, ostrm)
@@ -636,7 +636,7 @@ def inflate(data):
             continue
 
         raise Exception("Invalid block type")
-    
+
     return ostrm
 
 

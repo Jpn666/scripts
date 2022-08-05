@@ -81,23 +81,23 @@ markers = definemarkers()
 class BitStream(object):
     """docstring for BitStream"""
 
-    def __init__(self, handler):
+    def __init__(self, handle):
         super(BitStream, self).__init__()
 
-        self.handler = handler
+        self.handle = handle
         self.bc = 0  # bit buffer remaining bits
         self.bb = 0  # bit buffer
         self.overread = False
 
     def getbits(self, n):
         while self.bc < n:
-            m = ord(self.handler.read(1))
+            m = ord(self.handle.read(1))
             if m == 0xff:
-                b = ord(self.handler.read(1))
+                b = ord(self.handle.read(1))
                 if b == 0x00:
                     m = 0xff
                 else:
-                    self.handler.seek(-2, 1)
+                    self.handle.seek(-2, 1)
                     self.overread = True
                     m = 0
             self.bb  = (self.bb << 8) | m
@@ -165,13 +165,13 @@ class HuffmanTree(object):
         raise Exception("invalid code")
 
 
-def read16(handler, avance=True):
-    r = handler.read(2)
+def read16(handle, avance=True):
+    r = handle.read(2)
     if len(r) != 2:
         raise Exception(f"not a marker (read <> 2) {r}")
 
     if not avance:
-        handler.seek(handler.tell() - 2)
+        handle.seek(handle.tell() - 2)
     return r[0] << 8 | r[1]
 
 
@@ -219,7 +219,7 @@ class JPG(object):
     """
     """
 
-    def __init__(self, handler):
+    def __init__(self, handle):
         self.majorversion  = 0
         self.minorversion  = 0
 
@@ -234,7 +234,7 @@ class JPG(object):
         self.decoded = False
 
         # input stream
-        self.handler = handler
+        self.handle = handle
 
         # restart interval in MCU units
         self.rinterval = 0
@@ -291,39 +291,39 @@ class JPG(object):
 
 # segment parsers
 
-def parseAPP0(handler, jpg):
-    position = handler.tell()
-    r = read16(handler)
-    s = handler.read(5)
+def parseAPP0(handle, jpg):
+    position = handle.tell()
+    r = read16(handle)
+    s = handle.read(5)
 
     signature = s[:4]
     if signature != b"JFIF" and signature != b"JFXX":
         if signature == b"Ocad":
-            remaining = handler.tell() - position
-            handler.read(r - remaining)
+            remaining = handle.tell() - position
+            handle.read(r - remaining)
             return
         raise Exception(f"bad signature {s[:4]}")
 
-    jpg.majorversion = ord(handler.read(1))
-    jpg.minorversion = ord(handler.read(1))
+    jpg.majorversion = ord(handle.read(1))
+    jpg.minorversion = ord(handle.read(1))
     if jpg.majorversion != 1:
         print("version may not be supported")
 
     # density units
-    handler.read(1)
-    handler.read(2)  # x density
-    handler.read(2)  # y density
+    handle.read(1)
+    handle.read(2)  # x density
+    handle.read(2)  # y density
 
-    remaining = handler.tell() - position
-    handler.read(r - remaining)
+    remaining = handle.tell() - position
+    handle.read(r - remaining)
 
 
-def parseDQT(handler, jpg):
-    position = handler.tell()
-    r = read16(handler)
+def parseDQT(handle, jpg):
+    position = handle.tell()
+    r = read16(handle)
 
     def readtable():
-        s = ord(handler.read(1))
+        s = ord(handle.read(1))
         tableid   = (s >> 0) & 0x0f
         precision = (s >> 4) & 0x0f
         if precision:
@@ -337,19 +337,19 @@ def parseDQT(handler, jpg):
         table = []
         for i in range(64):
             if precision == 1:
-                table.append(ord(handler.read(1)))
+                table.append(ord(handle.read(1)))
                 continue
 
             # 16 bits
-            a = ord(handler.read(1))
-            b = ord(handler.read(1))
+            a = ord(handle.read(1))
+            b = ord(handle.read(1))
             table.append((a << 8) | b)
         jpg.QT[tableid] = table
 
     remaining = 1
     while remaining:
         readtable()
-        remaining = r - (handler.tell() - position)
+        remaining = r - (handle.tell() - position)
 
 
 def getblockmap(isampling, csampling):
@@ -390,11 +390,11 @@ def findcomponent(jpg, n):
     return None
 
 
-def parseSOF0(handler, jpg):
-    position = handler.tell()
-    r = read16(handler)
+def parseSOF0(handle, jpg):
+    position = handle.tell()
+    r = read16(handle)
 
-    s = ord(handler.read(1))
+    s = ord(handle.read(1))
     if s != 8 and s != 12 and s != 16:
        raise Exception("bad sample values")
     jpg.bitspersample = s
@@ -404,8 +404,8 @@ def parseSOF0(handler, jpg):
         raise Exception(f"bit sample {s} not supported")
 
     # image size
-    sizey = read16(handler)
-    sizex = read16(handler)
+    sizey = read16(handle)
+    sizex = read16(handle)
     if sizex == 0 or sizey == 0:
        raise Exception("image size values are wrong")
 
@@ -414,7 +414,7 @@ def parseSOF0(handler, jpg):
     print(f"image size y:{sizey} x:{sizex}")
 
     # jfif only has support for 1 or 3 components
-    s = ord(handler.read(1))
+    s = ord(handle.read(1))
     if s != 1 and s != 3:
         raise Exception(f"number of components <> 1 and <> 3 {s}")
     jpg.numcomponents = s
@@ -425,7 +425,7 @@ def parseSOF0(handler, jpg):
     # note: yuv may starts at component id 0, RGB DCT images uses
     # components ids: chr(82) + chr(71) + chr(66) (RGB)
     for i in range(jpg.numcomponents):
-        c = ord(handler.read(1))
+        c = ord(handle.read(1))
 
         component = jpg.components[i]
         component.id = c
@@ -433,7 +433,7 @@ def parseSOF0(handler, jpg):
         print(f"component {i} = id({c})")
 
         # sampling factors (vertical, horizontal)
-        j = ord(handler.read(1))
+        j = ord(handle.read(1))
         ys = (j >> 0) & 0x0f
         xs = (j >> 4) & 0x0f
         print(f"sampling {c} {ys} {xs}")
@@ -451,7 +451,7 @@ def parseSOF0(handler, jpg):
             xsampling = xs
 
         # quantization table (it must be defined)
-        j = ord(handler.read(1))
+        j = ord(handle.read(1))
         if j > 3:
             raise Exception(f"quantization table {j} out of range (0, 3)")
         if jpg.QT[j] == None:
@@ -493,8 +493,8 @@ def parseSOF0(handler, jpg):
         for i in range(c.ysampling * c.xsampling):
             c.blocks.append([0] * 64)
 
-    remaining = handler.tell() - position
-    handler.read(r - remaining)
+    remaining = handle.tell() - position
+    handle.read(r - remaining)
 
     # result (image)
     r = []
@@ -506,12 +506,12 @@ def parseSOF0(handler, jpg):
     jpg.image = r
 
 
-def parseDHT(handler, jpg):
-    position = handler.tell()
-    r = read16(handler)
+def parseDHT(handle, jpg):
+    position = handle.tell()
+    r = read16(handle)
 
     def readtable():
-        s = ord(handler.read(1))
+        s = ord(handle.read(1))
         tid   = (s >> 0) & 0x0f
         ttype = (s >> 4) & 0x01  # 0: DC table, 1: AC table
 
@@ -525,12 +525,12 @@ def parseDHT(handler, jpg):
 
         total = 0
         for i in range(16):
-            c = ord(handler.read(1))
+            c = ord(handle.read(1))
             total += c
             lengths.append(c)
 
         for i in range(total):
-            symbols.append(ord(handler.read(1)))
+            symbols.append(ord(handle.read(1)))
         print("lengths:", lengths)
         print("symbols:", symbols)
 
@@ -540,7 +540,7 @@ def parseDHT(handler, jpg):
     remaining = 1
     while remaining:
         readtable()
-        remaining = r - (handler.tell() - position)
+        remaining = r - (handle.tell() - position)
 
 
 def initblocks(jpg):
@@ -563,11 +563,11 @@ def initblocks(jpg):
         c.scan = r
 
 
-def parseSOS(handler, jpg):
-    position = handler.tell()
-    r = read16(handler)
+def parseSOS(handle, jpg):
+    position = handle.tell()
+    r = read16(handle)
 
-    s = ord(handler.read(1))
+    s = ord(handle.read(1))
     if s != 1 and s != 3:
         raise Exception("bad number of components")
 
@@ -576,8 +576,8 @@ def parseSOS(handler, jpg):
     print(f"SOS: number of components {s}")
     corder = []
     for i in range(s):
-        c = ord(handler.read(1))  # component ID
-        j = ord(handler.read(1))
+        c = ord(handle.read(1))  # component ID
+        j = ord(handle.read(1))
 
         n = findcomponent(jpg, c)
         if n == None:
@@ -607,10 +607,10 @@ def parseSOS(handler, jpg):
 
     jpg.sccount = s
     if jpg.isprogressive:
-        ss = ord(handler.read(1))
-        se = ord(handler.read(1))
+        ss = ord(handle.read(1))
+        se = ord(handle.read(1))
 
-        j = ord(handler.read(1))
+        j = ord(handle.read(1))
         ah = (j >> 4) & 0xf
         al = (j >> 0) & 0xf
 
@@ -659,9 +659,9 @@ def parseSOS(handler, jpg):
                 raise Exception("required AC huffman table not defined")
     else:
         # skip 3 bytes
-        handler.read(3)
+        handle.read(3)
 
-    remaining = r - (handler.tell() - position)
+    remaining = r - (handle.tell() - position)
     if remaining:
         raise Exception("invalid data")
 
@@ -675,11 +675,11 @@ def parseSOS(handler, jpg):
 
     if jpg.isprogressive == False:
         if jpg.isinterleaved == False:
-            decode(handler, jpg, component)
+            decode(handle, jpg, component)
         else:
-            decode(handler, jpg)
+            decode(handle, jpg)
     else:
-        decodepass(handler, jpg)
+        decodepass(handle, jpg)
 
 
 def inittable():
@@ -792,9 +792,9 @@ def decodeblock(jpg, component, block, update=True):
     IDCTblock(t0, block)
 
 
-def setdecoder(handler, jpg):
+def setdecoder(handle, jpg):
     # setup the huffman tables (set the input)
-    bitstream = BitStream(handler)
+    bitstream = BitStream(handle)
     for i in range(jpg.numcomponents):
         # we use the same bitstream (input) for all the huffman tables
         ac = jpg.components[i].achuffman
@@ -979,13 +979,13 @@ def setpixels1(jpg, y, x, block):
         row += 1
 
 
-def checkrinterval(handler, jpg):
-    m = ord(handler.read(1))
+def checkrinterval(handle, jpg):
+    m = ord(handle.read(1))
     if m != 0xff:
         raise Exception("invalid restart interval value")
 
     while True:
-        m = ord(handler.read(1))
+        m = ord(handle.read(1))
         if m != 0xff:
             break
 
@@ -997,8 +997,8 @@ def checkrinterval(handler, jpg):
         jpg.bitstream.bb = 0
 
 
-def decode(handler, jpg, component=None):
-    setdecoder(handler, jpg)
+def decode(handle, jpg, component=None):
+    setdecoder(handle, jpg)
 
     # non interleaved component
     if component:
@@ -1007,7 +1007,7 @@ def decode(handler, jpg, component=None):
             for x in range(component.ncols):
                 if jpg.rinterval:
                     if rinterval == 0:
-                        checkrinterval(handler, jpg)
+                        checkrinterval(handle, jpg)
                         rinterval = jpg.rinterval
                     rinterval -= 1
 
@@ -1037,7 +1037,7 @@ def decode(handler, jpg, component=None):
         for x in range(jpg.ncols):
             if jpg.rinterval:
                 if rinterval == 0:
-                    checkrinterval(handler, jpg)
+                    checkrinterval(handle, jpg)
                     rinterval = jpg.rinterval
                 rinterval -= 1
 
@@ -1094,7 +1094,7 @@ def readfirstDC(jpg):
         for x in range(totalx):
             if jpg.rinterval:
                 if rinterval == 0:
-                    checkrinterval(jpg.handler, jpg)
+                    checkrinterval(jpg.handle, jpg)
                     rinterval = jpg.rinterval
                 rinterval -= 1
 
@@ -1145,7 +1145,7 @@ def refineDC(jpg):
         for x in range(totalx):
             if jpg.rinterval:
                 if rinterval == 0:
-                    checkrinterval(jpg.handler, jpg)
+                    checkrinterval(jpg.handle, jpg)
                     rinterval = jpg.rinterval
                 rinterval -= 1
 
@@ -1207,7 +1207,7 @@ def readfirstAC(jpg):
         for x in range(c.ncols):
             if jpg.rinterval:
                 if rinterval == 0:
-                    checkrinterval(jpg.handler, jpg)
+                    checkrinterval(jpg.handle, jpg)
                     rinterval = jpg.rinterval
                 rinterval -= 1
 
@@ -1296,7 +1296,7 @@ def refineAC(jpg):
         for x in range(c.ncols):
             if jpg.rinterval:
                 if rinterval == 0:
-                    checkrinterval(jpg.handler, jpg)
+                    checkrinterval(jpg.handle, jpg)
                     rinterval = jpg.rinterval
                 rinterval -= 1
 
@@ -1304,8 +1304,8 @@ def refineAC(jpg):
             decoderefineAC(jpg, c, c.scan[n])
 
 
-def decodepass(handler, jpg):
-    setdecoder(handler, jpg)
+def decodepass(handle, jpg):
+    setdecoder(handle, jpg)
 
     if jpg.ss == 0:
         if jpg.se != 0:
@@ -1369,42 +1369,42 @@ def updateimage(jpg):
             setpixels3(jpg, y, x)
 
 
-def parseAPP2(handler, jpg):
-    r = read16(handler)
+def parseAPP2(handle, jpg):
+    r = read16(handle)
     r -= 2
 
     # offset 0 is the profile size
     # offset 36 is the signature "acsp"
-    m = handler.read(12)
+    m = handle.read(12)
     if m[:-1] != b"ICC_PROFILE":
-        handler.read(r - 12)
+        handle.read(r - 12)
         return
 
-    s1 = ord(handler.read(1))
-    s2 = ord(handler.read(1))
+    s1 = ord(handle.read(1))
+    s2 = ord(handle.read(1))
     if jpg.iccp == None:
         jpg.iccp = b""
-    jpg.iccp += handler.read(r - 12 - 2)
+    jpg.iccp += handle.read(r - 12 - 2)
 
     if s1 == s2:
         jpg.iccpsize = len(jpg.iccp)
 
 
-def parseDRI(handler, jpg):
-    r = read16(handler)
+def parseDRI(handle, jpg):
+    r = read16(handle)
     if r != 4:
         raise Exception("DRI marker size != 4")
 
-    i = read16(handler)
+    i = read16(handle)
     jpg.rinterval = i
 
 
-def parsesegments(handler):
-    jpg = JPG(handler)
+def parsesegments(handle):
+    jpg = JPG(handle)
 
     while True:
         try:
-            m = read16(handler)
+            m = read16(handle)
         except:
             if jpg.decoded:
                 print("end of input")
@@ -1417,7 +1417,7 @@ def parsesegments(handler):
         print(f"marker {m:00x} {s}")
 
         if m == APP0:
-            parseAPP0(handler, jpg)
+            parseAPP0(handle, jpg)
             continue
 
         if m in [SOF0, SOF1, SOF2]:
@@ -1425,22 +1425,22 @@ def parsesegments(handler):
                 print("progressive image")
                 jpg.isprogressive = True
 
-            parseSOF0(handler, jpg)
+            parseSOF0(handle, jpg)
             continue
 
         if m in [SOF3, SOF5, SOF6, SOF7]:
             raise Exception("image type not supported")
 
         if m == DQT:
-            parseDQT(handler, jpg)
+            parseDQT(handle, jpg)
             continue
 
         if m == DHT:
-            parseDHT(handler, jpg)
+            parseDHT(handle, jpg)
             continue
 
         if m == SOS:
-            parseSOS(handler, jpg)
+            parseSOS(handle, jpg)
             #if jpg.isprogressive:
             jpg.npass += 1
             #if jpg.npass == 5:
@@ -1458,12 +1458,12 @@ def parsesegments(handler):
             return jpg
 
         if m == DRI:
-            parseDRI(handler, jpg)
+            parseDRI(handle, jpg)
             continue
 
         # ICCP
         if m == APP2:
-            parseAPP2(handler, jpg)
+            parseAPP2(handle, jpg)
             continue
 
         # markers for frames using arithmetic coding
@@ -1474,25 +1474,25 @@ def parsesegments(handler):
         if (m >= 0xffd0 and m <= 0xffd9) or m == 0xff01:
             continue
 
-        r = read16(handler) - 2
+        r = read16(handle) - 2
         if r < 0:
             raise Exception("invalid marker length")
 
-        handler.read(r)
+        handle.read(r)
         continue
 
 
 def parsefile(fpath):
     try:
-        handler = open(fpath, "rb")
+        handle = open(fpath, "rb")
     except IOError:
         print("failed to open file")
         raise
 
     # check the header
-    r = read16(handler)
+    r = read16(handle)
     if r == 0xffd8:
-        image = parsesegments(handler)
+        image = parsesegments(handle)
         return image
 
     raise Exception("invalid image file (not a JPG?)")
